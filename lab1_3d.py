@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+file_path = "/Users/arina/.cache/kagglehub/datasets/balraj98/modelnet40-princeton-3d-object-dataset/versions/1/ModelNet40/airplane/test/airplane_0630.off"
 
 def read_off(filename: str):
     with open(filename, 'r') as f:
@@ -12,7 +13,7 @@ def read_off(filename: str):
         faces = [list(map(int, f.readline().strip().split()[1:])) for _ in range(n_faces)]
     return np.array(verts), faces
 
-def plot_off(vertices, faces, title="3D Model"):
+def plot_off(vertices, faces, title="3D Model", lim=None):
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
     mesh = Poly3DCollection([vertices[face] for face in faces], alpha=0.3, edgecolor='k')
@@ -23,7 +24,13 @@ def plot_off(vertices, faces, title="3D Model"):
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
 
-    ax.auto_scale_xyz(vertices[:, 0], vertices[:, 1], vertices[:, 2])
+    if lim is not None:
+        ax.set_xlim([-lim, lim])
+        ax.set_ylim([-lim, lim])
+        ax.set_zlim([-lim, lim])
+    else:
+        ax.auto_scale_xyz(vertices[:, 0], vertices[:, 1], vertices[:, 2])
+
     ax.set_title(title)
     plt.show()
 
@@ -50,21 +57,56 @@ def rotate_xz(X, theta):
                   [np.sin(theta), 0, np.cos(theta)]])
     return (A @ X.T).T, A
 
+
+def check_rotation(A, name=""):
+    det = np.linalg.det(A)
+    is_orthogonal = np.allclose(A.T @ A, np.eye(3))
+    print(f"[{name}] det(A) = {det:.3f}, Ортогональна (A^T * A = I): {is_orthogonal}")
+
+
 if __name__ == "__main__":
-    file_path = "/Users/arina/.cache/kagglehub/datasets/balraj98/modelnet40-princeton-3d-object-dataset/versions/1/ModelNet40/airplane/test/airplane_0630.off"
+
     vertices, faces = read_off(file_path)
-    print(vertices.shape)
+    print("Форма вершин:", vertices.shape)
+    print("Центр моделі:", np.round(vertices.mean(axis=0), 3))
 
-    plot_off(vertices, faces, "Original")
+    lim = np.linalg.norm(vertices, axis=1).max()
 
-    V, A = rotate_xy(vertices, np.pi / 4)
-    print("xy rotation 45°:\n", np.round(A, 3))
-    plot_off(V, faces, "Rotation 45° xy (about z)")
+    plot_off(vertices, faces, "Original", lim)
 
-    V, A = rotate_yz(vertices, np.pi / 4)
-    print("yz rotation 45°:\n", np.round(A, 3))
-    plot_off(V, faces, "Rotation 45° yz (about x)")
+    angle = np.pi / 4
 
-    V, A = rotate_xz(vertices, np.pi / 4)
-    print("xz rotation 45°:\n", np.round(A, 3))
-    plot_off(V, faces, "Rotation 45° xz (about y)")
+    V, A = rotate_xy(vertices, angle)
+    print("Матриця rotate_xy (45°):\n", np.round(A, 3))
+    check_rotation(A, "rotate_xy")
+    plot_off(V, faces, "Rotation 45° xy (about z)", lim)
+
+    V, A = rotate_yz(vertices, angle)
+    print("Матриця rotate_yz (45°):\n", np.round(A, 3))
+    check_rotation(A, "rotate_yz")
+    plot_off(V, faces, "Rotation 45° yz (about x)", lim)
+
+    V, A = rotate_xz(vertices, angle)
+    print("Матриця rotate_xz (45°):\n", np.round(A, 3))
+    check_rotation(A, "rotate_xz")
+    plot_off(V, faces, "Rotation 45° xz (about y)", lim)
+
+    a_yz, a_xz, a_xy = np.deg2rad(30), np.deg2rad(45), np.deg2rad(60)
+    _, A_yz = rotate_yz(vertices, a_yz)
+    _, A_xz = rotate_xz(vertices, a_xz)
+    _, A_xy = rotate_xy(vertices, a_xy)
+
+    A_total = A_xy @ A_xz @ A_yz
+    print("Матриця композиції (xy 60° @ xz 45° @ yz 30°):\n", np.round(A_total, 3))
+    check_rotation(A_total, "композиція")
+
+    V_total = (A_total @ vertices.copy().T).T
+    plot_off(V_total, faces, "Composition: yz 30° → xz 45° → xy 60°", lim)
+
+    V_seq, _ = rotate_yz(vertices, a_yz)
+    V_seq, _ = rotate_xz(V_seq, a_xz)
+    V_seq, _ = rotate_xy(V_seq, a_xy)
+    print("Матриця композиції == послідовне застосування:", np.allclose(V_total, V_seq))
+
+    A_other = A_yz @ A_xz @ A_xy
+    print("Інший порядок (xy → xz → yz) дає ту саму матрицю?", np.allclose(A_total, A_other))

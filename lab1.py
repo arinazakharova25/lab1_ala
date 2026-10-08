@@ -12,22 +12,8 @@ lynx = np.array([
 ])
 
 X = lynx.T
-print(X.shape)
+print(lynx.shape, X.shape)
 
-def show(X_orig, X_new, A=None, title=""):
-    if A is not None:
-        print(f"{title}\nМатриця перетворення:\n{A}\n")
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.fill(X_orig[0], X_orig[1], color="gray", alpha=0.4, label="Оригінал")
-    ax.fill(X_new[0], X_new[1], color="blue", alpha=0.4, label="Після")
-    ax.axhline(0, color="black", lw=0.5)
-    ax.axvline(0, color="black", lw=0.5)
-    ax.set_aspect("equal")
-    ax.grid(alpha=0.3)
-    ax.legend()
-    ax.set_title(title)
-    plt.show()
 
 def stretch(X, a, b):
     X = X.copy()
@@ -35,16 +21,12 @@ def stretch(X, a, b):
                   [0, b]])
     return A @ X, A
 
-Y, A = stretch(X, 1.5, 0.7)
-show(X, Y, A, "Stretch (1.5, 0.7)")
 
 def shear(X, a, b):
     X = X.copy()
     A = np.array([[1, a],
                   [b, 1]])
     return A @ X, A
-Y, A = shear(X, 0.5, 0)
-show(X, Y, A, "Shear (0.5, 0)")
 
 def reflection(X, a, b):
     X = X.copy()
@@ -52,8 +34,6 @@ def reflection(X, a, b):
                                     [2*a*b, b**2 - a**2]])
     return A @ X, A
 
-Y, A = reflection(X, 1, 1)
-show(X, Y, A, "Reflection (1, 1)")
 
 def rotation(X, theta):
     X = X.copy()
@@ -61,21 +41,50 @@ def rotation(X, theta):
                   [np.sin(theta),  np.cos(theta)]])
     return A @ X, A
 
-Y, A = rotation(X, np.pi / 4)
-show(X, Y, A, "rotation (1, 1)")
+def show(results, title=""):
+    n = len(results)
+    fig, axes = plt.subplots(1, n, figsize=(4 * n, 4))
+    for ax, (name, Y, A) in zip(np.atleast_1d(axes), results):
+        ax.fill(X[0], X[1], color="gray", alpha=0.3)
+        ax.fill(Y[0], Y[1], color="blue", alpha=0.4)
+        ax.axhline(0, color="k", lw=0.5)
+        ax.axvline(0, color="k", lw=0.5)
+        ax.set_aspect("equal")
+        ax.set_title(name, fontsize=10)
+        print(f"{name}\n{np.round(A, 3)}\n")
+    fig.suptitle(title)
+    plt.tight_layout()
+    plt.show()
 
-_, S = stretch(X, 1.5, 0.7)
-_, H = shear(X, 0.5, 0)
-_, R = rotation(X, np.pi/4)
 
-A1 = R @ H @ S
-Y1 = A1 @ X.copy()
-show(X, Y1, A1, "Order 1: Rotation @ Shear @ Stretch")
+if __name__ == "__main__":
+    tests = {
+        "Stretch": (stretch, [(1.5, 0.7), (2, 2), (-1, 1), (0, 1)]),
+        "Shear": (shear, [(0.5, 0), (0, 0.5), (0.5, 0.5), (1, 1)]),
+        "Reflection": (reflection, [(1, 1), (1, 0), (0, 1), (1, -1)]),
+        "Rotation": (rotation, [(np.pi / 4,), (-np.pi / 4,), (np.pi / 2,), (np.pi,)]),
+    }
+    for name, (func, params) in tests.items():
+        results = []
+        for p in params:
+            Y, A = func(X, *p)
+            results.append((f"{name} {tuple(np.round(p, 2))}", Y, A))
+        show(results, name)
 
-A2 = S @ H @ R
-Y2 = A2 @ X.copy()
-show(X, Y2, A2, "Order 2: Stretch @ Shear @ Rotation")
+    _, S = stretch(X, 1.5, 0.7)
+    _, H = shear(X, 0.5, 0)
+    _, R = rotation(X, np.pi / 4)
 
-A3 = R @ S @ H
-Y3 = A3 @ X.copy()
-show(X, Y3, A3, "Order 3: Rotation @ Stretch @ Shear")
+    A1 = R @ H @ S
+    A2 = S @ H @ R
+    A3 = R @ S @ H
+
+    show([("Order 1: R @ H @ S (S → H → R)", A1 @ X, A1),
+          ("Order 2: S @ H @ R (R → H → S)", A2 @ X, A2),
+          ("Order 3: R @ S @ H (H → S → R)", A3 @ X, A3)],
+         "Task 2: порядок перетворень")
+
+    print("A1 == A2", np.allclose(A1, A2))
+    print("A1 == A3", np.allclose(A1, A3))
+    print("A2 == A3", np.allclose(A2, A3))
+    print("det:", round(np.linalg.det(A1), 3), round(np.linalg.det(A2), 3), round(np.linalg.det(A3), 3))
